@@ -1,47 +1,30 @@
-/**
- * One-shot DB init for Postgres.
- * Generates SQL migrations from the schema and applies them.
- *
- * Run with: npm run db:init
- *
- * Requires DATABASE_URL. Locally, set it in .env.local or pass it in your shell.
- * On Vercel, the migration runs automatically as part of the deploy
- * (see package.json `postinstall` hook → scripts/migrate.ts).
- */
+import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { migrate } from "drizzle-orm/neon-http/migrator";
-import { neon } from "@neondatabase/serverless";
 
-if (!process.env.DATABASE_URL) {
-  console.error(
-    "[db:init] DATABASE_URL is required.\n" +
-      "  • On Vercel: add a Postgres database in the Storage tab.\n" +
-      "  • Locally: copy .env.example to .env.local and set DATABASE_URL.",
-  );
+const url = process.env.DATABASE_URL;
+if (!url) {
+  console.error("[db:init] DATABASE_URL is required. On Vercel: add a Postgres database in the Storage tab. Locally: set DATABASE_URL in .env.local.");
   process.exit(1);
 }
 
-const sql = neon(process.env.DATABASE_URL);
-const db = drizzle(sql);
-
 async function main() {
-  const url = process.env.DATABASE_URL!;
-  console.log("[db:init] applying migrations to", maskUrl(url));
+  const dbUrl = url as string;
+  const sql = neon(dbUrl);
+  const db = drizzle(sql);
+  console.log("[db:init] applying migrations to", maskUrl(dbUrl));
   await migrate(db, { migrationsFolder: "./drizzle" });
   console.log("[db:init] done");
 }
 
-function maskUrl(url: string): string {
+function maskUrl(u: string): string {
   try {
-    const u = new URL(url);
-    if (u.password) u.password = "***";
-    return u.toString();
+    const parsed = new URL(u);
+    if (parsed.password) parsed.password = "***";
+    return parsed.toString();
   } catch {
     return "***";
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().then(() => process.exit(0)).catch((err) => { console.error(err); process.exit(1); });
