@@ -1,91 +1,121 @@
+import Link from "next/link";
+import { requireUser } from "@/lib/session";
 import { db } from "@/db";
-import { invoices, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
-import { MarkPaidButton } from "./mark-paid-button";
-import { format, parseISO } from "date-fns";
+import { invoices } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { format, isAfter, parseISO } from "date-fns";
+import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
-export default async function PublicPayPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const inv = await db.query.invoices.findFirst({ where: eq(invoices.paidToken, token) });
-  if (!inv) notFound();
-  const user = await db.query.users.findFirst({ where: eq(users.id, inv.userId) });
-  if (!user) notFound();
-
-  const isPaid = inv.status === "paid";
-  const due = parseISO(inv.dueDate);
-  const overdue = !isPaid && due < new Date();
-
-  return (
-    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-md card p-6 sm:p-8">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-8 h-8 rounded bg-brand-600 text-white text-center text-sm leading-8 font-bold">P</span>
-          <div className="text-sm text-gray-500">{user.businessName}</div>
-        </div>
-        <h1 className="mt-4 text-2xl font-semibold">Invoice {inv.invoiceNumber}</h1>
-
-        <div className="mt-6 space-y-3 text-sm">
-          <Row label="Billed to" value={inv.clientName} />
-          <Row label="Issued" value={format(parseISO(inv.issuedDate), "MMM d, yyyy")} />
-          <Row
-            label="Due"
-            value={
-              <>
-                {format(due, "MMM d, yyyy")}
-                {overdue && (
-                  <span className="ml-2 text-red-600 text-xs font-semibold">(overdue)</span>
-                )}
-              </>
-            }
-          />
-          <div className="border-t border-gray-200 pt-3 mt-3 flex items-baseline justify-between">
-            <span className="font-semibold">Amount due</span>
-            <span className="font-semibold text-xl sm:text-2xl">
-              ${inv.amount.toFixed(2)} <span className="text-sm font-normal text-gray-500">{inv.currency}</span>
-            </span>
-          </div>
-        </div>
-
-        {inv.description && (
-          <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-700">
-            {inv.description}
-          </div>
-        )}
-
-        <div className="mt-8">
-          {isPaid ? (
-            <div className="rounded-md bg-green-50 border border-green-200 p-4 text-center">
-              <div className="flex items-center justify-center gap-2 text-green-800 font-semibold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Paid
-              </div>
-              <div className="text-xs text-green-700 mt-1">
-                Thank you! A receipt and review request has been emailed to {inv.clientEmail}.
-              </div>
-            </div>
-          ) : (
-            <MarkPaidButton token={token} />
-          )}
-        </div>
-
-        <p className="mt-6 text-xs text-gray-400 text-center">
-          Powered by Pay &amp; Review
-        </p>
-      </div>
-    </div>
-  );
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function StatusBadge({ status, dueDate }: { status: string; dueDate: string }) {
+  if (status === "paid") return <span className="badge-paid">Paid</span>;
+  if (status === "cancelled") return <span className="badge-cancelled">Cancelled</span>;
+  const due = parseISO(dueDate);
+  if (isAfter(new Date(), due)) return <span className="badge-overdue">Overdue</span>;
+  return <span className="badge-pending">Pending</span>;
+}
+
+export default async function InvoicesList() {
+  const session = await requireUser();
+  const list = await db.query.invoices.findMany({
+    where: eq(invoices.userId, session.sub),
+    orderBy: [desc(invoices.createdAt)],
+  });
+
   return (
-    <div className="flex justify-between items-baseline gap-3">
-      <span className="text-gray-500 whitespace-nowrap">{label}</span>
-      <span className="font-medium text-right">{value}</span>
+    <div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Invoices</h1>
+        <Link href="/dashboard/invoices/new" className="btn-primary text-sm">+ New</Link>
+      </div>
+
+      {/* Desktop table */}
+      <div className="mt-6 hidden md:block card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+            <tr>
+              <th className="px-4 py-3">#</th>
+              <th className="px-4 py-3">Client</th>
+              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3">Due</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  No invoices yet.{" "}
+                  <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
+                </td>
+              </tr>
+            )}
+            {list.map((inv) => (
+              <tr key={inv.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-mono text-xs">{inv.invoiceNumber}</td>
+                <td className="px-4 py-3">
+                  <div className="font-medium">{inv.clientName}</div>
+                  <div className="text-xs text-gray-500">{inv.clientEmail}</div>
+                </td>
+                <td className="px-4 py-3 font-medium">
+                  {formatMoney(inv.amount, inv.currency)}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {format(parseISO(inv.dueDate), "MMM d, yyyy")}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={inv.status} dueDate={inv.dueDate} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <a href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline">
+                    Pay link ↗
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="mt-4 md:hidden space-y-3">
+        {list.length === 0 && (
+          <div className="card p-8 text-center text-gray-500 text-sm">
+            No invoices yet.{" "}
+            <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
+          </div>
+        )}
+        {list.map((inv) => (
+          <Link key={inv.id} href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="card p-4 block active:bg-gray-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{inv.clientName}</div>
+                <div className="text-xs text-gray-500 truncate">{inv.clientEmail}</div>
+              </div>
+              <StatusBadge status={inv.status} dueDate={inv.dueDate} />
+            </div>
+            <div className="mt-3 flex items-baseline justify-between">
+              <span className="text-lg font-semibold">{formatMoney(inv.amount, inv.currency)}</span>
+              <span className="text-xs text-gray-500">Due {format(parseISO(inv.dueDate), "MMM d")}</span>
+            </div>
+            <div className="mt-2 text-xs text-gray-400 font-mono">{inv.invoiceNumber}</div>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
