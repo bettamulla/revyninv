@@ -24,7 +24,9 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-2xl font-semibold">Settings</h1>
-      <p className="mt-1 text-sm text-gray-600">Configure your business profile, review links, and message templates.</p>
+      <p className="mt-1 text-sm text-gray-600">
+        Configure your business profile, review links, and message templates.
+      </p>
 <!---->
       <div className="mt-6 card p-4 sm:p-6">
         <div className="flex items-center justify-between">
@@ -34,7 +36,9 @@ export default async function SettingsPage() {
 </div>
 
 
-        <p className="mt-1 text-sm text-gray-600">Configure these in Vercel → Settings → Environment Variables for live sending.</p>
+        <p className="mt-1 text-sm text-gray-600">
+          Configure these in Vercel Settings Environment Variables for live sending.
+        </p>
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <StatusRow label="Email (Resend)" ok={status.email} hint="Set RESEND_API_KEY in Vercel" />
           <StatusRow label="WhatsApp (Twilio)" ok={status.whatsapp} hint="Set TWILIO_* in Vercel" />
@@ -44,17 +48,19 @@ export default async function SettingsPage() {
       </div>
 
       <div className="mt-6">
-        <SettingsForm initial={{
-          businessName: user.businessName,
-          contactPhone: user.contactPhone || "",
-          reviewLinkGoogle: user.reviewLinkGoogle || "",
-          reviewLinkTrustpilot: user.reviewLinkTrustpilot || "",
-          reviewLinkCustom: user.reviewLinkCustom || "",
-          reminderOffsets: user.reminderOffsets,
-          emailTemplate: user.emailTemplate || "",
-          whatsappTemplate: user.whatsappTemplate || "",
-          thankYouTemplate: user.thankYouTemplate || "",
-        }} />
+        <SettingsForm
+          initial={{
+            businessName: user.businessName,
+            contactPhone: user.contactPhone || "",
+            reviewLinkGoogle: user.reviewLinkGoogle || "",
+            reviewLinkTrustpilot: user.reviewLinkTrustpilot || "",
+            reviewLinkCustom: user.reviewLinkCustom || "",
+            reminderOffsets: user.reminderOffsets,
+            emailTemplate: user.emailTemplate || "",
+            whatsappTemplate: user.whatsappTemplate || "",
+            thankYouTemplate: user.thankYouTemplate || "",
+          }}
+        />
       </div>
     </div>
   );
