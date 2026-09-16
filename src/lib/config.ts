@@ -1,6 +1,7 @@
 /**
  * Centralized env access with sane defaults.
- * Throws fast in production if AUTH_SECRET is missing.
+ * APP_URL falls back to a runtime-detected value when not set in env,
+ * so pay links work out of the box without configuration.
  */
 function required(name: string, fallback?: string): string {
   const v = process.env[name];
@@ -10,7 +11,21 @@ function required(name: string, fallback?: string): string {
 }
 
 export const config = {
-  appUrl: required("APP_URL", "http://localhost:3000"),
+  /**
+   * Returns APP_URL if set, otherwise tries to derive a sensible default.
+   * On Vercel: uses VERCEL_PROJECT_PRODUCTION_URL when available.
+   * Falls back to localhost for local dev.
+   */
+  get appUrl(): string {
+    if (process.env.APP_URL) return process.env.APP_URL;
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+      return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    return "http://localhost:3000";
+  },
   authSecret: required("AUTH_SECRET", "dev-only-secret-please-replace-with-random-32-bytes"),
   dbPath: required("DB_PATH", "./data/payreview.db"),
   email: {
@@ -28,11 +43,6 @@ export const config = {
   },
 };
 
-// Warn in dev if secrets are still defaults
 if (process.env.NODE_ENV === "production" && config.authSecret.startsWith("dev-only-")) {
-  // Don't throw at module load (would break `next build` data collection
-  // before env is wired up). Instead, fail loudly on the first request.
-  console.warn(
-    "[config] WARNING: AUTH_SECRET is set to the dev default. Set a strong secret in production env.",
-  );
+  console.warn("[config] WARNING: AUTH_SECRET is set to the dev default. Set a strong secret in production env.");
 }
