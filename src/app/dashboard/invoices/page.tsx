@@ -8,6 +8,18 @@ import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
 function StatusBadge({ status, dueDate }: { status: string; dueDate: string }) {
   if (status === "paid") return <span className="badge-paid">Paid</span>;
   if (status === "cancelled") return <span className="badge-cancelled">Cancelled</span>;
@@ -27,9 +39,7 @@ export default async function InvoicesList() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Invoices</h1>
-        <Link href="/dashboard/invoices/new" className="btn-primary text-sm">
-          + New
-        </Link>
+        <Link href="/dashboard/invoices/new" className="btn-primary text-sm">+ New</Link>
       </div>
 
       {/* Desktop table */}
@@ -49,7 +59,8 @@ export default async function InvoicesList() {
             {list.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                  No invoices yet. <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
+                  No invoices yet.{" "}
+                  <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
                 </td>
               </tr>
             )}
@@ -60,8 +71,8 @@ export default async function InvoicesList() {
                   <div className="font-medium">{inv.clientName}</div>
                   <div className="text-xs text-gray-500">{inv.clientEmail}</div>
                 </td>
-                <td className="px-4 py-3">
-                  ${inv.amount.toFixed(2)} {inv.currency}
+                <td className="px-4 py-3 font-medium">
+                  {formatMoney(inv.amount, inv.currency)}
                 </td>
                 <td className="px-4 py-3 text-gray-600">
                   {format(parseISO(inv.dueDate), "MMM d, yyyy")}
@@ -70,12 +81,7 @@ export default async function InvoicesList() {
                   <StatusBadge status={inv.status} dueDate={inv.dueDate} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <a
-                    href={`${config.appUrl}/pay/${inv.paidToken}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-brand-600 hover:underline"
-                  >
+                  <a href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline">
                     Pay link ↗
                   </a>
                 </td>
@@ -90,20 +96,11 @@ export default async function InvoicesList() {
         {list.length === 0 && (
           <div className="card p-8 text-center text-gray-500 text-sm">
             No invoices yet.{" "}
-            <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">
-              Create one
-            </Link>
-            .
+            <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
           </div>
         )}
         {list.map((inv) => (
-          <Link
-            key={inv.id}
-            href={`${config.appUrl}/pay/${inv.paidToken}`}
-            target="_blank"
-            rel="noreferrer"
-            className="card p-4 block active:bg-gray-50"
-          >
+          <Link key={inv.id} href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="card p-4 block active:bg-gray-50">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{inv.clientName}</div>
@@ -112,12 +109,8 @@ export default async function InvoicesList() {
               <StatusBadge status={inv.status} dueDate={inv.dueDate} />
             </div>
             <div className="mt-3 flex items-baseline justify-between">
-              <span className="text-lg font-semibold">
-                ${inv.amount.toFixed(2)} <span className="text-xs font-normal text-gray-500">{inv.currency}</span>
-              </span>
-              <span className="text-xs text-gray-500">
-                Due {format(parseISO(inv.dueDate), "MMM d")}
-              </span>
+              <span className="text-lg font-semibold">{formatMoney(inv.amount, inv.currency)}</span>
+              <span className="text-xs text-gray-500">Due {format(parseISO(inv.dueDate), "MMM d")}</span>
             </div>
             <div className="mt-2 text-xs text-gray-400 font-mono">{inv.invoiceNumber}</div>
           </Link>
