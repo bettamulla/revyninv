@@ -31,7 +31,9 @@ export default async function SettingsPage() {
       <div className="mt-6 card p-4 sm:p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Autopilot status</h2>
-          <span className="text-xs text-gray-500">{configuredCount} of {totalCount} configured</span>
+          <span className="text-xs text-gray-500">
+            {configuredCount} of {totalCount} configured
+          </span>
         
 </div>
 
@@ -70,13 +72,25 @@ function StatusRow({ label, ok, hint }: { label: string; ok: boolean; hint: stri
   return (
     <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
       <div className="flex items-center gap-3">
-        <span className={ok ? "inline-block w-2.5 h-2.5 rounded-full bg-green-500" : "inline-block w-2.5 h-2.5 rounded-full bg-gray-300"} />
+        <span
+          className={
+            ok
+              ? "inline-block w-2.5 h-2.5 rounded-full bg-green-500"
+              : "inline-block w-2.5 h-2.5 rounded-full bg-gray-300"
+          }
+        />
         <div>
           <div className="text-sm font-medium">{label}</div>
           <div className="text-xs text-gray-500">{hint}</div>
         </div>
       </div>
-      <span className={ok ? "text-xs font-semibold text-green-700" : "text-xs font-semibold text-gray-400"}>
+      <span
+        className={
+          ok
+            ? "text-xs font-semibold text-green-700"
+            : "text-xs font-semibold text-gray-400"
+        }
+      >
         {ok ? "Connected" : "Not set"}
       </span>
     </div>
