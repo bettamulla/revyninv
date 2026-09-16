@@ -1,75 +1,121 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { db } from "@/db";
-import { invoices, reviewRequests } from "@/db/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { invoices } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { format, isAfter, parseISO } from "date-fns";
+import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardOverview() {
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+function StatusBadge({ status, dueDate }: { status: string; dueDate: string }) {
+  if (status === "paid") return <span className="badge-paid">Paid</span>;
+  if (status === "cancelled") return <span className="badge-cancelled">Cancelled</span>;
+  const due = parseISO(dueDate);
+  if (isAfter(new Date(), due)) return <span className="badge-overdue">Overdue</span>;
+  return <span className="badge-pending">Pending</span>;
+}
+
+export default async function InvoicesList() {
   const session = await requireUser();
-
-  const allInvoices = await db.query.invoices.findMany({
+  const list = await db.query.invoices.findMany({
     where: eq(invoices.userId, session.sub),
+    orderBy: [desc(invoices.createdAt)],
   });
-
-  const total = allInvoices.length;
-  const paid = allInvoices.filter((i) => i.status === "paid").length;
-  const pending = allInvoices.filter((i) => i.status === "pending").length;
-  const now = new Date();
-  const overdue = allInvoices.filter(
-    (i) => i.status === "pending" && new Date(i.dueDate) < now,
-  ).length;
-
-  const totalRevenue = allInvoices
-    .filter((i) => i.status === "paid")
-    .reduce((sum, i) => sum + i.amount, 0);
-
-  // Reviews: count where review_request has a sentAt
-  const sentReviews = await db
-    .select()
-    .from(reviewRequests)
-    .innerJoin(invoices, eq(invoices.id, reviewRequests.invoiceId))
-    .where(and(eq(invoices.userId, session.sub), isNotNull(reviewRequests.sentAt)));
-
-  const reviewsSent = sentReviews.length;
-  const reviewsCollected = sentReviews.filter((row) => row.review_requests.clickedAt).length;
-
-  const cards = [
-    { label: "Invoices", value: total, sub: `${pending} pending · ${overdue} overdue` },
-    { label: "Paid", value: paid, sub: total > 0 ? `${Math.round((paid / total) * 100)}% conversion` : "—" },
-    { label: "Revenue collected", value: `$${totalRevenue.toFixed(0)}`, sub: "lifetime" },
-    { label: "Reviews", value: `${reviewsCollected}/${reviewsSent}`, sub: reviewsSent > 0 ? `${Math.round((reviewsCollected / reviewsSent) * 100)}% click rate` : "none yet" },
-  ];
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Overview</h1>
+        <h1 className="text-2xl font-semibold">Invoices</h1>
         <Link href="/dashboard/invoices/new" className="btn-primary text-sm">+ New</Link>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((c) => (
-          <div key={c.label} className="card p-5">
-            <div className="text-sm text-gray-500">{c.label}</div>
-            <div className="mt-2 text-3xl font-semibold">{c.value}</div>
-            <div className="mt-1 text-xs text-gray-500">{c.sub}</div>
-          </div>
-        ))}
+      {/* Desktop table */}
+      <div className="mt-6 hidden md:block card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+            <tr>
+              <th className="px-4 py-3">#</th>
+              <th className="px-4 py-3">Client</th>
+              <th className="px-4 py-3">Amount</th>
+              <th className="px-4 py-3">Due</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  No invoices yet.{" "}
+                  <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
+                </td>
+              </tr>
+            )}
+            {list.map((inv) => (
+              <tr key={inv.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-mono text-xs">{inv.invoiceNumber}</td>
+                <td className="px-4 py-3">
+                  <div className="font-medium">{inv.clientName}</div>
+                  <div className="text-xs text-gray-500">{inv.clientEmail}</div>
+                </td>
+                <td className="px-4 py-3 font-medium">
+                  {formatMoney(inv.amount, inv.currency)}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {format(parseISO(inv.dueDate), "MMM d, yyyy")}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={inv.status} dueDate={inv.dueDate} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <a href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:underline">
+                    Pay link ↗
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {total === 0 && (
-        <div className="mt-10 card p-10 text-center">
-          <h2 className="text-lg font-semibold">No invoices yet</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Create your first invoice to start chasing and collecting reviews on autopilot.
-          </p>
-          <Link href="/dashboard/invoices/new" className="btn-primary mt-6 inline-flex">
-            Create your first invoice
+      {/* Mobile card list */}
+      <div className="mt-4 md:hidden space-y-3">
+        {list.length === 0 && (
+          <div className="card p-8 text-center text-gray-500 text-sm">
+            No invoices yet.{" "}
+            <Link href="/dashboard/invoices/new" className="text-brand-600 hover:underline">Create one</Link>.
+          </div>
+        )}
+        {list.map((inv) => (
+          <Link key={inv.id} href={`${config.appUrl}/pay/${inv.paidToken}`} target="_blank" rel="noreferrer" className="card p-4 block active:bg-gray-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{inv.clientName}</div>
+                <div className="text-xs text-gray-500 truncate">{inv.clientEmail}</div>
+              </div>
+              <StatusBadge status={inv.status} dueDate={inv.dueDate} />
+            </div>
+            <div className="mt-3 flex items-baseline justify-between">
+              <span className="text-lg font-semibold">{formatMoney(inv.amount, inv.currency)}</span>
+              <span className="text-xs text-gray-500">Due {format(parseISO(inv.dueDate), "MMM d")}</span>
+            </div>
+            <div className="mt-2 text-xs text-gray-400 font-mono">{inv.invoiceNumber}</div>
           </Link>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
