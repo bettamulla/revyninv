@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export function MarkPaidButton({ token }: { token: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paid, setPaid] = useState(false);
 
   async function pay() {
     setLoading(true);
@@ -18,7 +17,9 @@ export function MarkPaidButton({ token }: { token: string }) {
         setError(j.error || "Failed to mark as paid");
         return;
       }
-      router.refresh();
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
     } finally {
       setLoading(false);
     }
@@ -26,8 +27,8 @@ export function MarkPaidButton({ token }: { token: string }) {
 
   return (
     <div>
-      <button onClick={pay} disabled={loading} className="btn-primary w-full">
-        {loading ? "Marking…" : "Mark as paid"}
+      <button onClick={pay} disabled={loading || paid} className="btn-primary w-full">
+        {loading ? "Marking…" : paid ? "✓ Paid" : "Mark as paid"}
       </button>
       {error && <p className="mt-2 text-sm text-red-600 text-center">{error}</p>}
       <p className="mt-3 text-xs text-gray-500 text-center">
